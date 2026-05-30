@@ -14,5 +14,7 @@ __pycache__/
 
 data/memory.json
 data/traces.jsonl
+data/notes/*.md
+!data/notes/.gitkeep
 
 *.log
