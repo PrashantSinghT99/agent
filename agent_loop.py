@@ -5,6 +5,8 @@ from tool_manager import ToolManager
 
 
 tool_manager = ToolManager()
+MAX_LLM_CALLS = 2
+MAX_TOOL_CALLS = 1
 
 
 def _save_and_return(
@@ -39,6 +41,8 @@ def run_agent(user_message: str) -> AgentResult:
     """
     message = user_message.strip()
     trace = [TraceEvent("user_message_received", {"message": message})]
+    llm_calls = 0
+    tool_calls = 0
 
     history = load_history()
     trace.append(TraceEvent("memory_loaded", {"messages": len(history)}))
@@ -60,7 +64,31 @@ def run_agent(user_message: str) -> AgentResult:
             "parts": [{"text": message}],
         }
     )
-    trace.append(TraceEvent("llm_request_started", {"contents": len(contents)}))
+    if llm_calls >= MAX_LLM_CALLS:
+        answer = "I stopped because the agent reached its LLM call limit."
+        trace.append(
+            TraceEvent(
+                "step_limit_reached",
+                {
+                    "limit": "llm_calls",
+                    "max": MAX_LLM_CALLS,
+                },
+            )
+        )
+        return _save_and_return(message, answer, trace)
+
+    llm_calls += 1
+    trace.append(
+        TraceEvent(
+            "llm_request_started",
+            {
+                "stage": "initial",
+                "contents": len(contents),
+                "llm_calls": llm_calls,
+                "max_llm_calls": MAX_LLM_CALLS,
+            },
+        )
+    )
 
     try:
         first_response = ask_llm_with_tools(contents)
@@ -87,12 +115,29 @@ def run_agent(user_message: str) -> AgentResult:
     function_call = function_calls[0]
     tool_name = function_call.name
     tool_args = dict(function_call.args)
+
+    if tool_calls >= MAX_TOOL_CALLS:
+        answer = "I stopped because the agent reached its tool call limit."
+        trace.append(
+            TraceEvent(
+                "step_limit_reached",
+                {
+                    "limit": "tool_calls",
+                    "max": MAX_TOOL_CALLS,
+                },
+            )
+        )
+        return _save_and_return(message, answer, trace)
+
+    tool_calls += 1
     trace.append(
         TraceEvent(
             "tool_call_requested",
             {
                 "tool": tool_name,
                 "args": tool_args,
+                "tool_calls": tool_calls,
+                "max_tool_calls": MAX_TOOL_CALLS,
             },
         )
     )
@@ -143,6 +188,32 @@ def run_agent(user_message: str) -> AgentResult:
         }
     )
     trace.append(TraceEvent("tool_result_appended", {"contents": len(contents)}))
+
+    if llm_calls >= MAX_LLM_CALLS:
+        answer = f"I used {tool_name}, but stopped before the final model call because the agent reached its LLM call limit. Tool result: {tool_result.output}"
+        trace.append(
+            TraceEvent(
+                "step_limit_reached",
+                {
+                    "limit": "llm_calls",
+                    "max": MAX_LLM_CALLS,
+                },
+            )
+        )
+        return _save_and_return(message, answer, trace)
+
+    llm_calls += 1
+    trace.append(
+        TraceEvent(
+            "llm_request_started",
+            {
+                "stage": "final",
+                "contents": len(contents),
+                "llm_calls": llm_calls,
+                "max_llm_calls": MAX_LLM_CALLS,
+            },
+        )
+    )
 
     try:
         final_response = ask_llm_with_tools(contents)
