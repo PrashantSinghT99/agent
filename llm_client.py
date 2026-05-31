@@ -6,6 +6,13 @@ load_dotenv()
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 MODEL = "gemini-2.5-flash"
+SYSTEM_INSTRUCTION = """
+You are a helpful study agent for a beginner learning AI agents.
+Keep answers clear and concise.
+Use tools when they are useful instead of guessing.
+Do not claim a note exists unless you used a note tool or saw it in context.
+If a tool returns an error, explain the problem simply.
+""".strip()
 
 
 TOOL_DECLARATIONS = [
@@ -63,6 +70,46 @@ TOOL_DECLARATIONS = [
             "required": ["title"],
         },
     },
+    {
+        "name": "search_notes",
+        "description": "Search saved notes by keyword and return matching snippets.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "query": {
+                    "type": "STRING",
+                    "description": "The keyword or phrase to search for in saved notes.",
+                },
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "remember_preference",
+        "description": "Save a user preference for future conversations.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "key": {
+                    "type": "STRING",
+                    "description": "Short preference key, for example: explanation_style.",
+                },
+                "value": {
+                    "type": "STRING",
+                    "description": "Preference value to remember.",
+                },
+            },
+            "required": ["key", "value"],
+        },
+    },
+    {
+        "name": "recall_preferences",
+        "description": "Recall saved user preferences.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {},
+        },
+    },
 ]
 
 
@@ -95,6 +142,7 @@ def ask_llm_with_tools(contents):
         model=MODEL,
         contents=contents,
         config={
+            "system_instruction": SYSTEM_INSTRUCTION,
             "tools": [{"function_declarations": TOOL_DECLARATIONS}],
             "automatic_function_calling": {"disable": True},
         },

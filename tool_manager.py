@@ -1,8 +1,9 @@
 from dataclasses import dataclass
 import inspect
 
+from memory import recall_preferences, remember_preference
 from tools.calculator import calculate
-from tools.notes import list_notes, read_note, save_note
+from tools.notes import list_notes, read_note, save_note, search_notes
 
 
 @dataclass
@@ -30,6 +31,9 @@ class ToolManager:
             "save_note": save_note,
             "list_notes": list_notes,
             "read_note": read_note,
+            "search_notes": search_notes,
+            "remember_preference": remember_preference,
+            "recall_preferences": recall_preferences,
         }
 
     def run(self, tool_name: str, tool_args: dict) -> ToolResult:

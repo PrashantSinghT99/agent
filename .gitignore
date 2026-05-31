@@ -13,6 +13,7 @@ __pycache__/
 .ruff_cache/
 
 data/memory.json
+data/preferences.json
 data/traces.jsonl
 data/notes/*.md
 !data/notes/.gitkeep

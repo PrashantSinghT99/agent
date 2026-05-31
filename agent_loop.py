@@ -1,6 +1,6 @@
 from llm_client import ask_llm_with_tools
-from memory import load_history, save_turn, to_gemini_contents
-from trace import AgentResult, TraceEvent
+from memory import load_history, preferences_context, save_turn, to_gemini_contents
+from trace import AgentResult, TraceEvent, save_trace
 from tool_manager import ToolManager
 
 
@@ -24,6 +24,7 @@ def _save_and_return(
     """
     save_turn(message, answer)
     trace.append(TraceEvent("memory_saved", {"messages_added": 2}))
+    save_trace(trace)
     return AgentResult(answer=answer, trace=trace)
 
 
@@ -43,6 +44,16 @@ def run_agent(user_message: str) -> AgentResult:
     trace.append(TraceEvent("memory_loaded", {"messages": len(history)}))
 
     contents = to_gemini_contents(history)
+    preference_context = preferences_context()
+    if preference_context:
+        contents.append(
+            {
+                "role": "user",
+                "parts": [{"text": preference_context}],
+            }
+        )
+        trace.append(TraceEvent("preferences_loaded", {"included": True}))
+
     contents.append(
         {
             "role": "user",
