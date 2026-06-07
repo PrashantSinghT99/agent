@@ -9,6 +9,7 @@ The goal is to start with a very small CLI agent and gradually evolve it toward 
 - CLI chat interface
 - Gemini API integration
 - Manual agent loop
+- Multi-step tool loop
 - Gemini function/tool calling
 - Python-controlled tool execution
 - Calculator tool
@@ -63,10 +64,10 @@ For a tool-using question:
 User message
   -> load memory and preferences
   -> send context + tool schemas to Gemini
-  -> Gemini returns function_call
-  -> Python validates and executes the tool
-  -> Python appends function_call + function_response
-  -> Gemini writes final answer
+  -> Gemini returns one or more function_call requests
+  -> Python validates and executes requested tools
+  -> Python appends function_call + function_response messages
+  -> loop continues until Gemini returns a final answer
   -> save turn to memory
   -> save trace
   -> print answer
@@ -185,7 +186,7 @@ llm_request_started
 tool_call_requested
 tool_executed
 tool_result_appended
-llm_final_answer_received
+llm_answer_received
 memory_saved
 ```
 
@@ -218,7 +219,7 @@ Current tests cover:
 - preference memory
 - tool manager success/error handling
 - trace JSONL logging
-- agent loop direct-answer and tool-call paths
+- agent loop direct-answer, one-tool, and multi-tool paths
 - step limit behavior
 
 ## What We Have Learned So Far
@@ -233,29 +234,22 @@ Current tests cover:
 - How to add debug traces
 - How to log traces to a file
 - How to add safety through error handling and step limits
+- How to run multiple tools in one guarded agent turn
 - How to test deterministic parts of an agent without calling the LLM
 
 ## Roadmap
 
-### 1. Multi-Step Tool Loop
+### 1. Context and Token Management
 
-Current flow supports:
+Current memory and tool results are passed directly into Gemini. Next we need context budgeting so long notes, long memory, and multi-step tool results do not grow without control.
 
-```txt
-LLM -> one tool -> LLM final answer
-```
+Planned work:
 
-Next upgrade:
-
-```txt
-LLM -> tool -> LLM -> tool -> LLM final answer
-```
-
-This will allow prompts like:
-
-```txt
-search my notes for memory and save a summary note
-```
+- approximate token counting
+- memory truncation
+- tool result truncation
+- note search result limits
+- trace events when context is trimmed
 
 ### 2. Stronger Guardrails
 

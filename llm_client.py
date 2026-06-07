@@ -138,6 +138,7 @@ def ask_llm_with_tools(contents):
     Returns:
         Gemini SDK response object, which may contain text or function calls.
     """
+    # Tool declarations tell Gemini what it may request; Python still executes tools.
     return client.models.generate_content(
         model=MODEL,
         contents=contents,

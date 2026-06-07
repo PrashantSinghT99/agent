@@ -8,6 +8,7 @@ console = Console()
 
 
 TRACE_STYLES = {
+    "agent_step_started": "bright_black",
     "user_message_received": "bold white",
     "memory_loaded": "dim",
     "memory_saved": "dim",

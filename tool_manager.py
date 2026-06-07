@@ -56,6 +56,7 @@ class ToolManager:
                 error=f"Available tools: {available_tools}",
             )
 
+        # Validate model-provided args before calling real Python code.
         try:
             inspect.signature(tool).bind(**tool_args)
         except TypeError as e:
@@ -65,6 +66,7 @@ class ToolManager:
                 error=str(e),
             )
 
+        # Tool exceptions become ToolResult errors instead of crashing the agent loop.
         try:
             return ToolResult(ok=True, output=tool(**tool_args))
         except Exception as e:
