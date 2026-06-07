@@ -1,3 +1,9 @@
+from context_manager import (
+    check_context_budget,
+    trim_history,
+    truncate_preferences,
+    truncate_tool_result,
+)
 from llm_client import ask_llm_with_tools
 from memory import load_history, preferences_context, save_turn, to_gemini_contents
 from trace import AgentResult, TraceEvent, save_trace
@@ -52,16 +58,33 @@ def run_agent(user_message: str) -> AgentResult:
     history = load_history()
     trace.append(TraceEvent("memory_loaded", {"messages": len(history)}))
 
-    contents = to_gemini_contents(history)
+    # Trim old history messages before building context.
+    raw_contents = to_gemini_contents(history)
+    contents, dropped = trim_history(raw_contents)
+    if dropped:
+        trace.append(
+            TraceEvent(
+                "history_trimmed",
+                {"dropped_messages": dropped, "kept_messages": len(contents)},
+            )
+        )
+
     preference_context = preferences_context()
     if preference_context:
+        # Truncate preferences if they are unexpectedly large.
+        safe_prefs, prefs_truncated = truncate_preferences(preference_context)
         contents.append(
             {
                 "role": "user",
-                "parts": [{"text": preference_context}],
+                "parts": [{"text": safe_prefs}],
             }
         )
-        trace.append(TraceEvent("preferences_loaded", {"included": True}))
+        trace.append(
+            TraceEvent(
+                "preferences_loaded",
+                {"included": True, "truncated": prefs_truncated},
+            )
+        )
 
     # `contents` is the transcript sent to Gemini for this agent turn.
     contents.append(
@@ -100,6 +123,11 @@ def run_agent(user_message: str) -> AgentResult:
 
         llm_calls += 1
         stage = "initial" if llm_calls == 1 else "after_tool"
+
+        # Check context budget and emit a trace event before every LLM call.
+        budget = check_context_budget(contents)
+        trace.append(TraceEvent("context_budget_checked", {**budget, "step": step}))
+
         trace.append(
             TraceEvent(
                 "llm_request_started",
@@ -193,13 +221,29 @@ def run_agent(user_message: str) -> AgentResult:
             )
 
             tool_result = tool_manager.run(tool_name, tool_args)
+
+            # Truncate large tool results (e.g., long notes) before injecting.
+            safe_output, result_truncated = truncate_tool_result(tool_result.output)
+            if result_truncated:
+                trace.append(
+                    TraceEvent(
+                        "tool_result_truncated",
+                        {
+                            "tool": tool_name,
+                            "original_chars": len(tool_result.output),
+                            "truncated_chars": len(safe_output),
+                            "step": step,
+                        },
+                    )
+                )
+
             trace.append(
                 TraceEvent(
                     "tool_executed",
                     {
                         "tool": tool_name,
                         "ok": tool_result.ok,
-                        "result": tool_result.output,
+                        "result": safe_output,
                         "error": tool_result.error,
                         "step": step,
                     },
@@ -220,12 +264,13 @@ def run_agent(user_message: str) -> AgentResult:
                 }
             )
             # Add Python's tool result so Gemini can reason about the next step.
+            # Use the already-truncated safe_output, not the raw result.
             response_parts.append(
                 {
                     "function_response": {
                         "name": tool_name,
                         "response": {
-                            "result": tool_result.output,
+                            "result": safe_output,
                         },
                     }
                 }
